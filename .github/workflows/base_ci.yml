@@ -9,6 +9,14 @@ on:
 permissions:
   contents: read
 
+# Prevent duplicate runs for the same release tag when GitHub
+# fires both 'published' and 'prereleased' events concurrently.
+# PRs use the PR number as the concurrency key so each PR is
+# independent; releases use the git ref (tag).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # ============================================================
   # Format check (PR only, runs in parallel with no dependencies)
@@ -83,7 +91,7 @@ jobs:
   # Scenario 2: Pre-release — upload wheel assets after test
   # ============================================================
   upload-prerelease-assets:
-    if: github.event_name == 'release' && github.event.action == 'prereleased'
+    if: github.event_name == 'release' && github.event.release.prerelease
     needs: test
     runs-on: ubuntu-22.04
     permissions:
@@ -111,7 +119,7 @@ jobs:
   # Scenario 3: Release — upload wheel assets after test
   # ============================================================
   upload-release-assets:
-    if: github.event_name == 'release' && github.event.action == 'published'
+    if: github.event_name == 'release' && !github.event.release.prerelease
     needs: test
     runs-on: ubuntu-22.04
     permissions:
@@ -138,7 +146,7 @@ jobs:
   # Scenario 3: Release — Docker build & push after test
   # ============================================================
   docker-build:
-    if: github.event_name == 'release' && github.event.action == 'published'
+    if: github.event_name == 'release' && !github.event.release.prerelease
     needs: test
     uses: ./.github/workflows/build_docker.yml
     with:
